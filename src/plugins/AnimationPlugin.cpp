@@ -1,4 +1,5 @@
 #include "plugins/AnimationPlugin.h"
+#include "esp_heap_caps.h"
 
 void AnimationPlugin::setup()
 {
@@ -29,11 +30,13 @@ void AnimationPlugin::loop()
 
     if (size > 0)
     {
-        std::vector<int> bits = Screen.readBytes(customAnimationFrames[this->step]);
+        Serial.println("**************************************************");
+        Serial.println("Current Screen: " + String(this->step));
 
-        for (int i = 0; i < bits.size(); i++)
+        for (int i = 0; i < customAnimationFrames[this->step].size(); i++)
         {
-            Screen.setPixelAtIndex(i, bits[i]);
+            Serial.println("Pixel Index: " + String(i) + " Value: " + String(customAnimationFrames[this->step][i]));
+            Screen.setPixelAtIndex(i, 1, (int) customAnimationFrames[this->step][i]);
         }
 
         this->step++;
@@ -43,27 +46,49 @@ void AnimationPlugin::loop()
             this->step = 0;
         }
         delay(400);
+        // Debugging memory 
+        Serial.println("**************************************************");
+        multi_heap_info_t info;
+        heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT); // internal RAM, memory capable to store data or to create new task
+        Serial.println("Total currently free in all non-continues blocks");
+        Serial.println(info.total_free_bytes);
+        Serial.println("Minimum free ever");
+        Serial.println(info.minimum_free_bytes);
+        Serial.println("Largest continues block to allocate big array");
+        Serial.println(info.largest_free_block);
+        
+        // Clear storage to prevent crash
+        storage.begin("led-wall", false);
+        storage.clear();
+        storage.end();
     }
 }
 
 void AnimationPlugin::websocketHook(DynamicJsonDocument &request)
 {
+    Serial.println("*************** Request Received ***********************************");
     const char *event = request["event"];
-    if (!strcmp(event, "upload"))
+    Serial.println(event);
+    if(!strcmp(event, "AnimationReset"))
     {
+        customAnimationFrames.clear();
         int size = (int)request["screens"];
-
+        Serial.println(size);
         customAnimationFrames.resize(size);
-        for (int i = 0; i < size; i++)
+    }
+    else if(!strcmp(event, "upload"))
+    {
+        Serial.println("Upload screen event received");
+        int screenIndex = (int)request["screenIndex"];
+        Serial.println("Screen Index: " + String(screenIndex));
+        // Get screen values into animation vector
+        for (int k = 0; k < 256; k++)
         {
-            for (int k = 0; k < 32; k++)
+            if (k == 0)
             {
-                if (k == 0)
-                {
-                    customAnimationFrames[i].resize(32);
-                }
-                customAnimationFrames[i][k] = (int)request["data"][i][k];
+                customAnimationFrames[screenIndex].resize(256);
             }
+            customAnimationFrames[screenIndex][k] = (int)request["data"][k];
         }
     }
 }

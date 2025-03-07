@@ -13,7 +13,8 @@ import { ScreenInfo } from './components/screen-info';
 import { Tooltip } from './components/tooltip';
 import { useStore } from './contexts/store';
 import { useToast } from './contexts/toast';
-import { chunkArray, matrixToHexArray } from './helpers';
+import { chunkArray, brightnessExpTransform } from './helpers';
+import { generateAnimationAI } from './services/openaiCompletions';
 
 export const Creator: Component = () => {
   const [store, actions] = useStore();
@@ -24,6 +25,49 @@ export const Creator: Component = () => {
       store?.plugin,
     true,
   );
+  let userRequest = `Draw a beating heart`;
+  const brigthnessTest = Array.from({ length: 256 }, (_, i) => i);
+  console.log(brigthnessTest);
+  const sampleResponse2 =`[
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0, 50,100,100, 50,  0,  0, 50,100,100, 50,  0,  0,  0,
+    0,  0, 50,150,255,255,150, 50, 50,150,255,255,150, 50,  0,  0,
+    0, 50,150,255,255,255,255,150,150,255,255,255,255,150, 50,  0,
+    0,100,255,255,255,255,255,255,255,255,255,255,255,255,100,  0,
+    50,150,255,255,255,255,255,255,255,255,255,255,255,255,150, 50,
+    50,150,255,255,255,255,255,255,255,255,255,255,255,255,150, 50,
+    0,100,255,255,255,255,255,255,255,255,255,255,255,255,100,  0,
+    0, 50,150,255,255,255,255,255,255,255,255,255,255,150, 50,  0,
+    0,  0, 50,150,255,255,255,255,255,255,255,255,150, 50,  0,  0,
+    0,  0,  0,100,255,255,255,255,255,255,255,255,100,  0,  0,  0,
+    0,  0,  0,  0,150,255,255,255,255,255,255,150,  0,  0,  0,  0,
+    0,  0,  0,  0, 50,150,255,255,255,255,150, 50,  0,  0,  0,  0,
+    0,  0,  0,  0,  0, 50,150,255,255,150, 50,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0, 50,150,150, 50,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0, 50, 50,  0,  0,  0,  0,  0,  0,  0
+  ]`
+  const sampleResponse =`[
+    0,  0,  0,  0,  0,   50, 50,50, 50, 50, 0,  0,  0,  0,  0,  0,
+    0,  0,  0,  50, 50, 100,100,100,100,100,50,50,  0,  0,  0,  0,
+    0,  0,  50, 100,100, 130,130,130,130,130,100,100,50,0,  0,  0,
+    0,  50,100,130,130,130,130,130,130,130,130,130,100,50,  0,  0,
+    0,  50,100,130,130,130,130,130,130,130,130,130,100,50,  0,  0,
+    50, 100,130,130,130,130,50,50,50,130,130,130,130,100,  50,  0,
+    50, 100,130,130,130,50,255,255,255,50,130,130,130,100, 50,  0,
+    50, 50, 50, 50, 50, 50,255,255,255,50, 50, 50, 50, 50, 50, 50,
+    50, 150,255,255,255,50,255,255,255,50,255,255,255,150, 50,  0,
+    50, 150,255,255,255,255,50,50,50,255,255,255,255,150,  50,  0,
+    0, 50,150,255,255,255,255,255,255,255,255,255,150,50,   0,  0,
+    0, 50,150,255,255,255,255,255,255,255,255,255,150,50,   0,  0,
+    0,  0, 50,150,150,255,255,255,255,255,150,150,50,   0,  0,  0,
+    0,  0,  0,  50,50,150,150,150,150,150, 50, 50,  0,  0,  0,  0,
+    0,  0,  0,  0,  0, 50, 50, 50, 50, 50,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
+  ]`
+  // Parsing the string to an array of numbers
+  const numberArray: number[] = JSON.parse(sampleResponse);
+  //const numberArray: number[] = brigthnessTest;
+  console.log(numberArray);
 
   const [isPlaying, setIsPlaying] = createSignal(false);
   const [screenSignals, setScreenSignals] = createSignal<
@@ -36,7 +80,7 @@ export const Creator: Component = () => {
 
   const createNewScreen = (initialData?: number[]) => {
     const [screen, setScreen] = createSignal(
-      initialData || new Array(256).fill(0),
+      initialData || numberArray,
     );
     return [screen, setScreen] as const;
   };
@@ -85,17 +129,29 @@ export const Creator: Component = () => {
   const handleUploadData = () => {
     if (isAnimationPluginActive()) {
       const screens = screenSignals().map(([screen]) => screen());
+      console.log("SCREENS");
+      console.log(screens);
+      const mappedScreens= screens.map((screen) =>screen.map(s => s > 0 ? 1 : 0));
+      console.log("MAPPED SCREENS");
+      console.log(mappedScreens);
 
-      actions!.send(
-        JSON.stringify({
+      // Clear Animation
+      const resetPayload =JSON.stringify({
+        event: 'AnimationReset',
+        screens: screens.length
+      });
+      console.log("RESET PAYLOAD \n"+ resetPayload);
+      actions!.send(resetPayload);
+      // Send individual messages for each screen
+      for (const [index, screen]  of screens.entries()) {
+        const screenPayload =JSON.stringify({
           event: 'upload',
-          screens: screens.length,
-          data: screens.map((screen) =>
-            matrixToHexArray(screen.map((s) => (s > 0 ? 1 : 0))),
-          ),
-        }),
-      );
-
+          screenIndex: index,
+          data: screen.map((pixel) => (pixel > 150 ? 255 : brightnessExpTransform(pixel,100)))
+        });
+        console.log("SCREEN PAYLOAD \n"+ screenPayload);
+        actions!.send(screenPayload);
+      }
       toast('Data uploaded successfully!', 3000);
     } else {
       toast('Set plugin to "Animation"!', 3000);
@@ -103,16 +159,26 @@ export const Creator: Component = () => {
   };
 
   const handleExportData = () => {
+    console.log("ENTER EXPORT");
     const animation = [];
     const screens = screenSignals().map(([screen]) => screen());
     for (const screen of screens) {
+      console.log("SCREEN");
+      console.log(screen);
       animation.push(
         chunkArray(screen, 8).map(
-          (chunk) =>
-            `0x${parseInt(chunk.join(''), 2).toString(16).padStart(2, '0')}`,
+          (chunk) =>{
+            console.log("CHUNK");
+            console.log(chunk);
+            console.log(chunk.join(''));
+            console.log(parseInt(chunk.join(''), 2));
+            return `0x${parseInt(chunk.join(''), 2).toString(16).padStart(2, '0')}`},
         ),
       );
     }
+
+    console.log("ANIMATION");
+    console.log(animation);
 
     const element = document.createElement('a');
     element.setAttribute(
@@ -152,6 +218,31 @@ if (size > 0)
 
   const handleTogglePlay = () => {
     setIsPlaying(!isPlaying());
+  };
+
+  const generateAIAnimation = () => {
+    console.log(userRequest);
+    fetchData();
+  };
+
+  const onUserRequestChange = (newRequest:string) => {
+    userRequest = newRequest;
+  };
+
+  const fetchData = async () => {
+    try {
+      const newAIScreen = await generateAnimationAI(userRequest);
+      //setCurrentFrame([...newAIScreen]);
+      setScreenSignals((signals) => {
+        const [_, setScreen] = signals[signals.length-1];
+        setScreen(newAIScreen);
+        return signals;
+      });
+      
+    } catch (err: any) {
+      console.log(err);
+    } finally {
+    }
   };
 
   createEffect(() => {
@@ -332,7 +423,34 @@ if (size > 0)
               </p>
             </Show>
           </div>
-
+          <div class="my-6 border-t border-gray-200" />
+          <div class="space-y-3">
+            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              AI Generator
+            </h3>
+            <div class="space-y-2">
+              <div class="flex gap-2.5">
+                <textarea class="border border-gray-200"
+                  id="textarea"
+                  value={userRequest}
+                  onChange={(e) =>
+                    onUserRequestChange(e.currentTarget.value)
+                  }
+                  placeholder={userRequest? userRequest:"Type your request here..."}
+                  rows="4"
+                  cols="50"
+                />
+              </div>
+            </div>
+            <Tooltip text="Ask LLM to generate an animation">
+                  <button
+                    onClick={generateAIAnimation}
+                    class="w-full bg-blue-600 text-white border-0 px-4 py-3 uppercase text-sm leading-6 tracking-wider cursor-pointer font-bold hover:opacity-80 active:translate-y-[-1px] transition-all rounded"
+                  >
+                    Generate!
+                  </button>
+                </Tooltip>
+          </div>
           <div class="mt-auto pt-6 border-t border-gray-200">
             <Tooltip text="Return to main editor">
               <a

@@ -4,6 +4,8 @@
 #ifdef ENABLE_SERVER
 
 AsyncWebSocket ws("/ws");
+// Buffer to store full message when fragmented
+String messageBuffer = "";
 
 void sendInfo()
 {
@@ -72,6 +74,8 @@ void onWsEvent(
     uint8_t *data,
     size_t len)
 {
+  Serial.println("*************** WS Received ***********************************");
+  Serial.println("Type:" + String(type));
   if (type == WS_EVT_CONNECT)
   {
     sendInfo();
@@ -80,8 +84,14 @@ void onWsEvent(
   if (type == WS_EVT_DATA)
   {
     AwsFrameInfo *info = (AwsFrameInfo *)arg;
+    Serial.println("info->final: " + String(info->final));
+    Serial.println("info->index: " + String(info->index));
+    Serial.println("info->len: " + String(info->len));
+    Serial.println("info->opcode: " + String(info->opcode));
+
     if (info->final && info->index == 0 && info->len == len)
     {
+      Serial.println("Received full single message");
       if (info->opcode == WS_BINARY && currentStatus == WSBINARY && info->len == 256)
       {
         Screen.setRenderBuffer(data, true);
@@ -89,7 +99,7 @@ void onWsEvent(
       else if (info->opcode == WS_TEXT)
       {
         data[len] = 0;
-
+        
         DynamicJsonDocument wsRequest(6144);
         DeserializationError error = deserializeJson(wsRequest, data);
 
@@ -133,6 +143,31 @@ void onWsEvent(
           }
         }
       }
+    }
+    else {
+      if (info->index == 0) {
+        messageBuffer = ""; // Clear buffer when starting new message
+        Serial.println("Starting new message");
+      }
+
+      // Append part of message to buffer
+      for (size_t i = 0; i < len; i++) {
+        messageBuffer += (char)data[i];
+      }
+      // Deserialize Final Json
+      DynamicJsonDocument wsRequest(6144);
+      DeserializationError error = deserializeJson(wsRequest, messageBuffer);
+
+      if (error)
+      {
+        Serial.print(F("deserializeJson() big JSON failed: "));
+        Serial.println(error.f_str());
+        return;
+      }
+      else
+        {
+          pluginManager.getActivePlugin()->websocketHook(wsRequest);
+        }
     }
   }
 }

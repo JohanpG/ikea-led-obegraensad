@@ -61,6 +61,7 @@ export const LedMatrix: Component<Props> = (props) => {
   };
 
   const handlePointerEvent = (e: PointerEvent) => {
+    console.log("GET POSITION");
     if (!canvasRef || props.disabled) return null;
 
     const rect = canvasRef.getBoundingClientRect();
@@ -77,12 +78,14 @@ export const LedMatrix: Component<Props> = (props) => {
     if (x >= 0 && x < MATRIX_SIZE && y >= 0 && y < MATRIX_SIZE) {
       const index = y * MATRIX_SIZE + x;
       const mappedIndex = props.indexData[index];
+      console.log(index, mappedIndex );
       return { index, mappedIndex };
     }
     return null;
   };
 
   const handlePointerDown = (e: PointerEvent) => {
+    console.log("POINTER DOWN");
     if (props.disabled) return;
     e.preventDefault();
 
@@ -91,6 +94,10 @@ export const LedMatrix: Component<Props> = (props) => {
 
     isDrawing = true;
     currentDrawValue = props.data[position.mappedIndex] > 0 ? 0 : 255;
+    console.log("VALUE");
+    console.log(currentDrawValue);
+    console.log(props.data);
+    console.log(props.indexData);
     props.onSetLed?.({ index: position.mappedIndex, status: currentDrawValue });
 
     const newState = props.data.map((led, i) =>
@@ -122,6 +129,7 @@ export const LedMatrix: Component<Props> = (props) => {
   };
 
   const handlePointerUp = () => {
+    console.log("POINTER DOWN");
     if (isDrawing && props.onSetMatrix) {
       props.onSetMatrix(props.data);
     }

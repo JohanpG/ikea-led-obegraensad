@@ -79,3 +79,22 @@ export const matrixToHexArray = (matrix: number[]) =>
   chunkArray(matrix, 8).map((chunk) =>
     parseInt(parseInt(chunk.join(''), 2).toString(), 10)
   );
+
+export  const brightnessExpTransform = (x:number, scale:number = 100) => {
+    /**
+     * Apply an exponential transformation to an input value x in the range [0, 255],
+     * mapping it to an output range of [0, scale].
+     *
+     * @param {number} x - Input value (0 to 255).
+     * @param {number} scale - Maximum output range (default 100).
+     * @returns {number} Transformed value mapped to [0, scale].
+     */
+    if (x < 0 || x > 255) {
+        throw new Error("Input must be in the range 0-255");
+    }
+
+    const expValue = Math.exp(x / 255) - 1; // Exponential transformation
+    const maxExp = Math.exp(1) - 1; // Normalization factor (ensures max value is scale)
+
+    return Math.round((expValue / maxExp) * scale); // Normalize to 0-100 range
+  }
